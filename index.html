@@ -10,7 +10,7 @@ html, body { height:100%; margin:0; display:flex; justify-content:center; align-
 #container { display:flex; flex-direction:column; align-items:center; }
 .header { font-size:24px; margin-bottom:10px; color:#333; font-weight:bold; text-align:center; }
 #game-container { width:600px; height:600px; position:relative; }
-canvas { border:3px solid #333; display:block; margin:auto; }
+canvas { display:block; margin:auto; }
 #resetButton { margin-top:10px; padding:8px 16px; font-size:16px; border:none; border-radius:6px; background:#2b8a3e; color:white; cursor:pointer; display:none; }
 </style>
 </head>
@@ -24,10 +24,11 @@ canvas { border:3px solid #333; display:block; margin:auto; }
 <script>
 const WIDTH = 600;
 const HEIGHT = 600;
-const HEADER_HEIGHT = 50;
 const GRID_ROWS = 5;
 const GRID_COLS = 5;
-const TILE_SIZE = (HEIGHT - 20) / GRID_ROWS; // ensure all rows fit
+const TOP_OFFSET = 60; // space for message text
+const TILE_PADDING = 4;
+const TILE_SIZE = (HEIGHT - TOP_OFFSET - TILE_PADDING*(GRID_ROWS+1)) / GRID_ROWS;
 
 class Boot extends Phaser.Scene {
   constructor(){ super('Boot'); }
@@ -39,24 +40,22 @@ class Main extends Phaser.Scene {
   init(){ this.carrotsFound = 0; this.gameOver = false; }
 
   create(){
-    // --- Bunny in background ---
+    // Bunny in background
     this.add.text(WIDTH/2, HEIGHT/2, '🐰', {font:`80px Arial`}).setOrigin(0.5).setAlpha(0.2);
 
-    // --- Message text ---
+    // Message text
     this.message = this.add.text(WIDTH/2, 20, '', {font:'20px Arial', fill:'#333'}).setOrigin(0.5);
 
-    // --- Tile grid ---
+    // Tile grid
     this.tilesGroup = this.add.group();
     this.tilesData = [];
-
-    const topOffset = 60;
 
     for(let r=0;r<GRID_ROWS;r++){
       this.tilesData[r] = [];
       for(let c=0;c<GRID_COLS;c++){
-        const x = c*TILE_SIZE + TILE_SIZE/2;
-        const y = r*TILE_SIZE + TILE_SIZE/2 + topOffset;
-        const tileRect = this.add.rectangle(x, y, TILE_SIZE-4, TILE_SIZE-4, 0xffffff).setStrokeStyle(2, 0x333);
+        const x = c*TILE_SIZE + TILE_SIZE/2 + TILE_PADDING*(c+1);
+        const y = r*TILE_SIZE + TILE_SIZE/2 + TOP_OFFSET + TILE_PADDING*(r+1);
+        const tileRect = this.add.rectangle(x, y, TILE_SIZE, TILE_SIZE, 0xffffff);
         const tileText = this.add.text(x, y, '🌫️', {font:`${TILE_SIZE/2}px Arial`}).setOrigin(0.5);
         tileRect.setInteractive();
         tileRect.row = r; tileRect.col = c;
@@ -80,11 +79,9 @@ class Main extends Phaser.Scene {
     this.message.setText('');
     this.resetButton.style.display = 'none';
     this.totalCarrots = 5;
-    this.prizeCount = 1;
 
     this.tiles = [];
 
-    // Reset tiles
     for(let r=0;r<GRID_ROWS;r++){
       for(let c=0;c<GRID_COLS;c++){
         const t = this.tilesData[r][c];
@@ -127,7 +124,7 @@ class Main extends Phaser.Scene {
       tile.text.setText('👨‍🌾');
       this.endGame('Oops! You clicked the farmer. Game over.');
     } else {
-      tile.text.setText('🪴'); // reveal plant for empty tiles clicked
+      tile.text.setText('🪴'); // reveal plant on empty tile
     }
   }
 
@@ -135,7 +132,7 @@ class Main extends Phaser.Scene {
     this.gameOver = true;
     this.message.setText(message);
 
-    // Reveal all remaining carrots and empty plants
+    // Reveal all remaining tiles
     this.tiles.forEach(t=>{
       if(!t.revealed){
         if(t.content === 'carrot') t.text.setText('🥕');
@@ -145,7 +142,7 @@ class Main extends Phaser.Scene {
       }
     });
 
-    this.resetButton.style.display = 'block'; // show play again button
+    this.resetButton.style.display = 'block';
   }
 }
 

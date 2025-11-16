@@ -6,20 +6,23 @@
 <title>Find the Carrots Game</title>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
 <style>
-html, body { height:100%; margin:0; display:flex; justify-content:center; align-items:center; background:#a8e6cf; }
-#game-container { width:100%; max-width:600px; height:100vh; display:flex; justify-content:center; align-items:center; }
-canvas { border: 3px solid #333; }
+html, body { height:100%; margin:0; display:flex; justify-content:center; align-items:flex-start; background:#a8e6cf; font-family: Arial, sans-serif; }
+#game-container { width:100%; max-width:600px; height:100vh; display:flex; justify-content:center; align-items:flex-start; position:relative; }
+canvas { border:3px solid #333; }
+.header { width:100%; text-align:center; font-size:24px; margin:10px 0; color:#333; font-weight:bold; }
 </style>
 </head>
 <body>
+<div class="header">Find all carrots before farmer catches you!</div>
 <div id="game-container"></div>
 
 <script>
 const WIDTH = 600;
 const HEIGHT = 600;
+const HEADER_HEIGHT = 50;
 const GRID_ROWS = 5;
 const GRID_COLS = 5;
-const TILE_SIZE = WIDTH / GRID_COLS;
+const TILE_SIZE = (HEIGHT - HEADER_HEIGHT - 20) / GRID_ROWS; // Ensure all rows fit
 
 class Boot extends Phaser.Scene {
   constructor(){ super('Boot'); }
@@ -31,21 +34,25 @@ class Main extends Phaser.Scene {
   init(){ this.carrotsFound = 0; this.gameOver = false; }
 
   create(){
+    // --- Bunny in background ---
+    this.add.text(WIDTH/2, HEIGHT/2, '🐰', {font:`80px Arial`}).setOrigin(0.5).setAlpha(0.2);
+
+    // --- Message text ---
+    this.message = this.add.text(WIDTH/2, 20, '', {font:'20px Arial', fill:'#333'}).setOrigin(0.5);
+
+    // --- Tile grid ---
     this.tilesGroup = this.add.group();
-    this.message = this.add.text(WIDTH/2, 20, '', {font:'24px Arial', fill:'#333'}).setOrigin(0.5);
-
-    // Adjust top offset so the last row fits
-    const topOffset = 60;
-
-    // --- Create tile grid ---
     this.tilesData = [];
+
+    const topOffset = HEADER_HEIGHT + 20;
+
     for(let r=0;r<GRID_ROWS;r++){
       this.tilesData[r] = [];
       for(let c=0;c<GRID_COLS;c++){
         const x = c*TILE_SIZE + TILE_SIZE/2;
         const y = r*TILE_SIZE + TILE_SIZE/2 + topOffset;
         const tileRect = this.add.rectangle(x, y, TILE_SIZE-4, TILE_SIZE-4, 0xffffff).setStrokeStyle(2, 0x333);
-        const tileText = this.add.text(x, y, '🪴', {font:`${TILE_SIZE/2}px Arial`, align:'center'}).setOrigin(0.5);
+        const tileText = this.add.text(x, y, '🌫️', {font:`${TILE_SIZE/2}px Arial`}).setOrigin(0.5);
         tileRect.setInteractive();
         tileRect.row = r; tileRect.col = c;
         tileRect.revealed = false;
@@ -74,7 +81,7 @@ class Main extends Phaser.Scene {
         const t = this.tilesData[r][c];
         t.revealed = false;
         t.content = 'empty';
-        t.text.setText('🪴');
+        t.text.setText('🌫️');
         this.tiles.push(t);
       }
     }
@@ -104,21 +111,34 @@ class Main extends Phaser.Scene {
       if(this.carrotsFound === this.totalCarrots){
         this.message.setText('You found all carrots! You win!');
         this.gameOver = true;
+        this.revealRemainingEmpty();
         this.time.delayedCall(1500, ()=>this.resetGame());
       }
     } else if(tile.content === 'prize'){
       tile.text.setText('🎁');
       this.message.setText('You found the prize! Instant win!');
       this.gameOver = true;
+      this.revealRemainingEmpty();
       this.time.delayedCall(1500, ()=>this.resetGame());
     } else if(tile.content === 'farmer'){
       tile.text.setText('👨‍🌾');
       this.message.setText('Oops! You clicked the farmer. Game over.');
       this.gameOver = true;
+      this.revealRemainingEmpty();
       this.time.delayedCall(1500, ()=>this.resetGame());
     } else {
-      tile.text.setText('🪴'); // Should never happen
+      // reveal plant on empty tile
+      tile.text.setText('🪴');
     }
+  }
+
+  revealRemainingEmpty(){
+    // show plants on all empty unrevealed tiles
+    this.tiles.forEach(t=>{
+      if(!t.revealed && t.content==='empty'){
+        t.text.setText('🪴');
+      }
+    });
   }
 }
 

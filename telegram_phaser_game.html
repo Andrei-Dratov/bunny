@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Telegram Mini Game — Runner</title>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+  <style>
+    html, body { height:100%; margin:0; background: linear-gradient(#87CEEB, #ffffff); }
+    #game-container { width:100%; height:100vh; display:flex; align-items:center; justify-content:center; }
+    canvas { max-width:100%; height:auto; }
+    .overlay { position: absolute; top:10px; left:10px; font-family: Arial, Helvetica, sans-serif; color:#222; background: rgba(255,255,255,0.75); padding:6px 8px; border-radius:6px; }
+    .btn { padding:8px 12px; border-radius:6px; border:none; background:#2b8a3e; color:white; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <div id="game-container"></div>
+  <div class="overlay" id="hud">Score: 0</div>
+
+<script>
+// Simple polished endless runner using Phaser 3.
+// Single-file — ready to host. Replace or extend assets as you want.
+
+const WIDTH = Math.min(window.innerWidth, 900);
+const HEIGHT = Math.min(window.innerHeight, 600);
+
+class Boot extends Phaser.Scene {
+  constructor(){ super('Boot'); }
+  preload(){
+    // We'll generate simple graphics in runtime; no external assets required.
+  }
+  create(){ this.scene.start('Main'); }
+}
+
+class Main extends Phaser.Scene {
+  constructor(){ super('Main'); }
+  init(){ this.score = 0; this.gameOver = false; }
+  create(){
+    // background parallax
+    this.bg1 = this.add.tileSprite(0, 0, WIDTH, HEIGHT, null).setOrigin(0).setScrollFactor(0);
+    this.bg2 = this.add.tileSprite(0, HEIGHT*0.4, WIDTH, HEIGHT*0.6, null).setOrigin(0).setScrollFactor(0);
+
+    // draw backgrounds using graphics textures
+    const g = this.make.graphics({x:0,y:0, add:false});
+    // far sky band
+    g.fillStyle(0x8ed6ff, 1); g.fillRect(0, 0, WIDTH, HEIGHT*0.4);
+    // hills
+    g.fillStyle(0x2b8a3e, 1); g.fillEllipse(WIDTH*0.25, HEIGHT*0.9, WIDTH*0.7, 220);
+    g.fillEllipse(WIDTH*0.75, HEIGHT*0.9, WIDTH*0.7, 220);
+    g.generateTexture('bg', WIDTH, HEIGHT);
+    this.bg1.setTexture('bg');
+
+    // ground
+    const groundH = 96;
+    this.ground = this.add.tileSprite(0, HEIGHT - groundH, WIDTH*2, groundH, null).setOrigin(0);
+    const gg = this.make.graphics({x:0, y:0, add:false});
+    gg.fillStyle(0x6b4f2f, 1); gg.fillRect(0,0,WIDTH*2,groundH);
+    // planks
+    gg.lineStyle(2, 0x5a3f2a, 1);
+    for(let i=0;i<40;i++){ gg.strokeRect(i*80, 0, 60, groundH); }
+    gg.generateTexture('ground', WIDTH*2, groundH);
+    this.ground.setTexture('ground');
+
+    // player (simple rounded rectangle)
+    const p = this.make.graphics({x:0,y:0,add:false}); p.fillStyle(0xffd166,1); p.fillRoundedRect(0,0,60,60,10);
+    p.lineStyle(3, 0xff9f1c, 1); p.strokeRoundedRect(0,0,60,60,10);
+    p.generateTexture('player', 60, 60);
+
+    // obstacle (spike)
+    const o = this.make.graphics({x:0,y:0,add:false}); o.fillStyle(0xff3b3b,1); o.beginPath(); o.moveTo(20,60); o.lineTo(40,0); o.lineTo(60,60); o.closePath(); o.fillPath();
+    o.generateTexture('spike', 60, 60);
+
+    // coin
+    const c = this.make.graphics({x:0,y:0,add:false}); c.fillStyle(0xffd700,1); c.fillCircle(16,16,14); c.lineStyle(3,0xffa500,1); c.strokeCircle(16,16,14);
+    c.generateTexture('coin', 32, 32);
+
+    // physics
+    this.physics.world.setBounds(0,0,999999, HEIGHT);
+    this.player = this.physics.add.sprite(120, HEIGHT - groundH - 30, 'player').setScale(1).setCollideWorldBounds(true);
+    this.player.body.setSize(48,56,true);
+    this.player.setGravityY(1400);
+
+    // invisible ground collider
+    this.floor = this.physics.add.staticGroup();
+    this.floor.create(WIDTH/2, HEIGHT - groundH/2, 'ground').setVisible(false).setScale(1).refreshBody();
+
+    this.physics.add.collider(this.player, this.floor);
+
+    // groups
+    this.obstacles = this.physics.add.group();
+    this.coins = this.physics.add.group();
+
+    this.physics.add.overlap(this.player, this.coins, this.collectCoin, null, this);
+    this.physics.add.collider(this.player, this.obstacles, this.hitObstacle, null, this);
+
+    // controls
+    this.cursors = this.input.keyboard.createCursorKeys();
+    this.input.on('pointerdown', this.tryJump, this);
+
+    // timers
+    this.spawnTimer = this.time.addEvent({ delay: 1200, callback: this.spawnObstacle, callbackScope: this, loop:true });
+    this.coinTimer = this.time.addEvent({ delay: 900, callback: this.spawnCoin, callbackScope: this, loop:true });
+
+    // UI
+    this.hud = document.getElementById('hud');
+    this.updateHUD();
+
+    // smooth camera follow
+    this.cameras.main.startFollow(this.player, false, 0.08, 0.08);
+    this.cameras.main.setBounds(0,0,999999, HEIGHT);
+
+    // start velocity
+    this.worldSpeed = 340; // pixels/sec
+
+    // mobile hint
+    if (/Mobi|Android/i.test(navigator.userAgent)){
+      const t = this.add.text(20,20,'Tap to jump', {font:'16px Arial', fill:'#222'}).setScrollFactor(0).setDepth(5);
+    }
+
+    // nice particle trail for player
+    this.particles = this.add.particles('coin');
+    this.emitter = this.particles.createEmitter({ x: this.player.x-20, y: this.player.y+10, speed: {min:-40, max:40}, lifespan: 400, scale:{start:0.25,end:0}, frequency: 90 });
+  }
+
+  update(time, delta){
+    if(this.gameOver) return;
+    // move world by shifting tiles
+    const step = (this.worldSpeed * (delta/1000));
+    this.ground.tilePositionX += step * 0.4;
+    this.bg1.tilePositionX += step * 0.12;
+    this.bg2.tilePositionX += step * 0.22;
+
+    // advance obstacles/coins manually (they have body velocities)
+    Phaser.Actions.Call(this.obstacles.getChildren(), function(o){
+      o.x -= step; if(o.x < this.cameras.main.worldView.x - 100) o.destroy();
+    }, this);
+    Phaser.Actions.Call(this.coins.getChildren(), function(c){ c.x -= step; if(c.x < this.cameras.main.worldView.x - 100) c.destroy(); }, this);
+
+    // allow jump
+    if (this.cursors.up.isDown || this.cursors.space.isDown) this.tryJump();
+
+    // emitter follows player
+    this.emitter.setPosition(this.player.x - 20, this.player.y + 10);
+
+    // gentle increase difficulty
+    if (Math.floor(time/10000) > 0) this.worldSpeed = 340 + Math.floor(time/10000) * 20;
+  }
+
+  tryJump(){
+    if(this.player.body.touching.down || this.player.body.onFloor()){
+      this.player.setVelocityY(-620);
+      // small visual
+      this.tweens.add({ targets:this.player, duration:120, scale:1.05, yoyo:true });
+    }
+  }
+
+  spawnObstacle(){
+    const y = HEIGHT - 120; // ground spike
+    const x = this.cameras.main.worldView.x + WIDTH + 60;
+    const sp = this.obstacles.create(x, y, 'spike'); sp.setOrigin(0.5,1); sp.body.setAllowGravity(false);
+    sp.setImmovable(true);
+    sp.setSize(40,60,true);
+  }
+
+  spawnCoin(){
+    const y = Phaser.Math.Between(HEIGHT - 220, HEIGHT - 160);
+    const x = this.cameras.main.worldView.x + WIDTH + Phaser.Math.Between(20,140);
+    const c = this.coins.create(x, y, 'coin'); c.body.setAllowGravity(false); c.setCircle(14);
+  }
+
+  collectCoin(player, coin){
+    coin.destroy(); this.score += 10; this.updateHUD();
+    // pop effect
+    const pop = this.add.text(player.x, player.y - 40, '+10', {font:'18px Arial', fill:'#222'}).setOrigin(0.5);
+    this.tweens.add({ targets: pop, y: pop.y - 30, alpha:0, duration:700, onComplete: ()=>pop.destroy() });
+  }
+
+  hitObstacle(){
+    this.gameOver = true;
+    this.player.setTint(0xff6666);
+    this.player.setVelocity(0,0);
+    this.spawnTimer.remove(); this.coinTimer.remove();
+    this.add.text(this.cameras.main.worldView.x + WIDTH/2, HEIGHT/2 - 40, 'Game Over', {fontSize:'40px', fontFamily:'Arial', color:'#222'}).setOrigin(0.5);
+    this.add.text(this.cameras.main.worldView.x + WIDTH/2, HEIGHT/2 + 10, 'Score: ' + this.score, {fontSize:'22px', fontFamily:'Arial', color:'#222'}).setOrigin(0.5);
+
+    // Call placeholder to send score to Telegram (requires server-side Bot API call setGameScore)
+    // Example: window.postMessage({type:'gameScore', score: this.score}, '*');
+    // We'll also show a retry button
+    const btn = this.add.text(this.cameras.main.worldView.x + WIDTH/2, HEIGHT/2 + 70, 'Play again', {fontSize:'20px', fontFamily:'Arial', backgroundColor:'#2b8a3e', padding:{x:10,y:8}, color:'#fff'}).setOrigin(0.5).setInteractive();
+    btn.on('pointerdown', ()=>this.scene.restart());
+
+    // If game is running inside Telegram's webview you can attempt to notify the native layer (placeholder)
+    try{
+      if(window.TelegramGameProxy){
+        // hypothetical API for some clients; keep optional and non-fatal
+        window.TelegramGameProxy.sendScore && window.TelegramGameProxy.sendScore(this.score);
+      }
+    }catch(e){/*ignore*/}
+
+    // also log to console for easy testing
+    console.log('GAME_OVER_SCORE', this.score);
+  }
+
+  updateHUD(){ this.hud.innerText = 'Score: ' + this.score; }
+}
+
+const config = {
+  type: Phaser.AUTO,
+  parent: 'game-container',
+  width: WIDTH,
+  height: HEIGHT,
+  physics: { default: 'arcade', arcade: { gravity: {y:0}, debug: false } },
+  scene: [Boot, Main]
+};
+
+window.addEventListener('load', ()=>{
+  window.game = new Phaser.Game(config);
+});
+
+// Resize handler so the game stays usable on orientation changes
+window.addEventListener('resize', ()=>{ location.reload(); });
+
+</script>
+</body>
+</html>

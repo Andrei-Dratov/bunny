@@ -19,6 +19,7 @@
 <script>
 const WIDTH = Math.min(window.innerWidth, 900);
 const HEIGHT = Math.min(window.innerHeight, 600);
+const GROUND_HEIGHT = 96;
 
 class Boot extends Phaser.Scene {
   constructor(){ super('Boot'); }
@@ -30,45 +31,33 @@ class Main extends Phaser.Scene {
   init(){ this.score = 0; this.gameOver = false; }
 
   create(){
-    const groundH = 96;
-
     // --- BACKGROUND ---
-    const bgGraphics = this.make.graphics({add:false});
-    bgGraphics.fillStyle(0x8ed6ff, 1);
-    bgGraphics.fillRect(0,0,200,HEIGHT); // sky
-    bgGraphics.generateTexture('bg', 200, HEIGHT);
-    this.bg1 = this.add.tileSprite(0,0,WIDTH,HEIGHT,'bg').setOrigin(0);
-
-    const hills = this.make.graphics({add:false});
-    hills.fillStyle(0x2b8a3e, 1);
-    hills.fillEllipse(50, HEIGHT-30, 140, 60);
-    hills.fillEllipse(150, HEIGHT-40, 180, 80);
-    hills.generateTexture('hills', 200, HEIGHT);
-    this.bg2 = this.add.tileSprite(0, HEIGHT*0.4, WIDTH, HEIGHT*0.6, 'hills').setOrigin(0);
+    // sky
+    this.add.rectangle(0, 0, WIDTH, HEIGHT, 0x8ed6ff).setOrigin(0,0);
+    // simple hills
+    this.hillsGroup = this.add.group();
+    for(let i=0;i<5;i++){
+      const hill = this.add.ellipse(i*180, HEIGHT-50, 180, 80, 0x2b8a3e);
+      this.hillsGroup.add(hill);
+    }
 
     // --- GROUND ---
-    const groundG = this.make.graphics({add:false});
-    groundG.fillStyle(0x6b4f2f,1);
-    groundG.fillRect(0,0,200,groundH);
-    groundG.lineStyle(2, 0x5a3f2a,1);
-    for(let i=0;i<3;i++){ groundG.strokeRect(i*60,0,50,groundH); }
-    groundG.generateTexture('ground',200,groundH);
-    this.ground = this.add.tileSprite(0, HEIGHT - groundH, WIDTH, groundH, 'ground').setOrigin(0);
+    this.groundGroup = this.add.group();
+    for(let i=0;i<Math.ceil(WIDTH/60)+2;i++){
+      const plank = this.add.rectangle(i*60, HEIGHT-GROUND_HEIGHT/2, 50, GROUND_HEIGHT, 0x6b4f2f);
+      this.groundGroup.add(plank);
+    }
 
     // --- PLAYER ---
-    const p = this.make.graphics({add:false});
-    p.fillStyle(0xffd166,1); p.fillRoundedRect(0,0,60,60,10);
-    p.lineStyle(3,0xff9f1c,1); p.strokeRoundedRect(0,0,60,60,10);
-    p.generateTexture('player',60,60);
-
-    this.physics.world.setBounds(0,0,999999, HEIGHT);
-    this.player = this.physics.add.sprite(120, HEIGHT-groundH-30,'player').setCollideWorldBounds(true);
-    this.player.body.setSize(48,56,true);
-    this.player.setGravityY(1400);
+    this.player = this.add.rectangle(120, HEIGHT-GROUND_HEIGHT-30, 60, 60, 0xffd166);
+    this.physics.add.existing(this.player);
+    this.player.body.setSize(60,60);
+    this.player.body.setGravityY(1400);
+    this.player.body.setCollideWorldBounds(true);
 
     // --- FLOOR COLLIDER ---
-    this.floor = this.physics.add.staticGroup();
-    this.floor.create(WIDTH/2, HEIGHT-groundH/2, 'ground').setVisible(false).setScale(1).refreshBody();
+    this.floor = this.add.rectangle(WIDTH/2, HEIGHT-GROUND_HEIGHT/2, WIDTH, GROUND_HEIGHT).setVisible(false);
+    this.physics.add.existing(this.floor, true);
     this.physics.add.collider(this.player, this.floor);
 
     // --- GROUPS ---
@@ -96,15 +85,7 @@ class Main extends Phaser.Scene {
     // --- WORLD SPEED ---
     this.worldSpeed = 340;
 
-    // --- PARTICLE TRAIL ---
-    const coinGraphics = this.make.graphics({add:false});
-    coinGraphics.fillStyle(0xffd700,1); coinGraphics.fillCircle(16,16,14);
-    coinGraphics.lineStyle(3,0xffa500,1); coinGraphics.strokeCircle(16,16,14);
-    coinGraphics.generateTexture('coin',32,32);
-    this.particles = this.add.particles('coin');
-    this.emitter = this.particles.createEmitter({ x:this.player.x-20, y:this.player.y+10, speed:{min:-40,max:40}, lifespan:400, scale:{start:0.25,end:0}, frequency:90 });
-
-    // MOBILE HINT
+    // --- MOBILE HINT ---
     if(/Mobi|Android/i.test(navigator.userAgent)){
       this.add.text(20,20,'Tap to jump', {font:'16px Arial', fill:'#222'}).setScrollFactor(0).setDepth(5);
     }
@@ -112,58 +93,60 @@ class Main extends Phaser.Scene {
 
   update(time, delta){
     if(this.gameOver) return;
-
     const step = this.worldSpeed * delta/1000;
-    this.ground.tilePositionX += step*0.4;
-    this.bg1.tilePositionX += step*0.12;
-    this.bg2.tilePositionX += step*0.22;
 
-    Phaser.Actions.Call(this.obstacles.getChildren(), o=>{ o.x -= step; if(o.x<this.cameras.main.worldView.x-100) o.destroy(); });
-    Phaser.Actions.Call(this.coins.getChildren(), c=>{ c.x -= step; if(c.x<this.cameras.main.worldView.x-100) c.destroy(); });
+    // Move hills & ground
+    this.hillsGroup.children.iterate(h => { h.x -= step*0.2; if(h.x+90<0) h.x += WIDTH + 180; });
+    this.groundGroup.children.iterate(g => { g.x -= step*0.4; if(g.x+25<0) g.x += WIDTH + 60; });
 
+    // Move obstacles & coins
+    Phaser.Actions.Call(this.obstacles.getChildren(), o=>{ o.x -= step; if(o.x<-100) o.destroy(); });
+    Phaser.Actions.Call(this.coins.getChildren(), c=>{ c.x -= step; if(c.x<-100) c.destroy(); });
+
+    // Jump input
     if(this.cursors.up.isDown || this.cursors.space.isDown) this.tryJump();
-    this.emitter.setPosition(this.player.x-20,this.player.y+10);
 
+    // Increase speed gradually
     if(Math.floor(time/10000)>0) this.worldSpeed = 340 + Math.floor(time/10000)*20;
   }
 
   tryJump(){
     if(this.player.body.touching.down || this.player.body.onFloor()){
-      this.player.setVelocityY(-620);
-      this.tweens.add({ targets:this.player, duration:120, scale:1.05, yoyo:true });
+      this.player.body.setVelocityY(-620);
     }
   }
 
   spawnObstacle(){
-    const oGraphics = this.make.graphics({add:false});
-    oGraphics.fillStyle(0xff3b3b,1);
-    oGraphics.beginPath(); oGraphics.moveTo(20,60); oGraphics.lineTo(40,0); oGraphics.lineTo(60,60); oGraphics.closePath(); oGraphics.fillPath();
-    oGraphics.generateTexture('spike',60,60);
-
     const x = this.cameras.main.worldView.x + WIDTH + 60;
-    const y = HEIGHT - 120;
-    const sp = this.obstacles.create(x,y,'spike').setOrigin(0.5,1);
-    sp.body.setAllowGravity(false);
-    sp.setImmovable(true);
+    const y = HEIGHT - GROUND_HEIGHT - 30;
+    const spike = this.add.triangle(x, y, 0,60, 30,0, 60,60, 0xff3b3b);
+    this.physics.add.existing(spike);
+    spike.body.setAllowGravity(false);
+    spike.body.setImmovable(true);
+    this.obstacles.add(spike);
   }
 
   spawnCoin(){
     const x = this.cameras.main.worldView.x + WIDTH + Phaser.Math.Between(20,140);
-    const y = Phaser.Math.Between(HEIGHT - 220, HEIGHT - 160);
-    const c = this.coins.create(x,y,'coin'); c.body.setAllowGravity(false); c.setCircle(14);
+    const y = Phaser.Math.Between(HEIGHT - GROUND_HEIGHT - 100, HEIGHT - GROUND_HEIGHT - 40);
+    const coin = this.add.circle(x, y, 14, 0xffd700);
+    this.physics.add.existing(coin);
+    coin.body.setAllowGravity(false);
+    this.coins.add(coin);
   }
 
   collectCoin(player, coin){
-    coin.destroy(); this.score += 10; this.updateHUD();
-    const pop = this.add.text(player.x,player.y-40,'+10',{font:'18px Arial', fill:'#222'}).setOrigin(0.5);
-    this.tweens.add({ targets:pop, y:pop.y-30, alpha:0, duration:700, onComplete: ()=>pop.destroy() });
+    coin.destroy();
+    this.score += 10;
+    this.updateHUD();
   }
 
   hitObstacle(){
     this.gameOver = true;
-    this.player.setTint(0xff6666);
-    this.player.setVelocity(0,0);
-    this.spawnTimer.remove(); this.coinTimer.remove();
+    this.player.fillColor = 0xff6666;
+    this.player.body.setVelocity(0,0);
+    this.spawnTimer.remove();
+    this.coinTimer.remove();
 
     this.add.text(this.cameras.main.worldView.x+WIDTH/2, HEIGHT/2-40,'Game Over',{fontSize:'40px', fontFamily:'Arial', color:'#222'}).setOrigin(0.5);
     this.add.text(this.cameras.main.worldView.x+WIDTH/2, HEIGHT/2+10,'Score: '+this.score,{fontSize:'22px', fontFamily:'Arial', color:'#222'}).setOrigin(0.5);
@@ -180,7 +163,7 @@ const config = {
   parent: 'game-container',
   width: WIDTH,
   height: HEIGHT,
-  physics: { default: 'arcade', arcade: { gravity: {y:0}, debug:false } },
+  physics: { default:'arcade', arcade:{ gravity:{y:0}, debug:false } },
   scene: [Boot, Main]
 };
 

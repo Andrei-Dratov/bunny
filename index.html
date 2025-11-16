@@ -1,15 +1,15 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Find the Carrots Game</title>
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
-  <style>
-    html, body { height:100%; margin:0; display:flex; justify-content:center; align-items:center; background:#a8e6cf; }
-    #game-container { width:100%; max-width:600px; height:100vh; display:flex; justify-content:center; align-items:center; }
-    canvas { border: 3px solid #333; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Find the Carrots Game</title>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+<style>
+html, body { height:100%; margin:0; display:flex; justify-content:center; align-items:center; background:#a8e6cf; }
+#game-container { width:100%; max-width:600px; height:100vh; display:flex; justify-content:center; align-items:center; }
+canvas { border: 3px solid #333; }
+</style>
 </head>
 <body>
 <div id="game-container"></div>
@@ -34,20 +34,25 @@ class Main extends Phaser.Scene {
     this.tilesGroup = this.add.group();
     this.message = this.add.text(WIDTH/2, 20, '', {font:'24px Arial', fill:'#333'}).setOrigin(0.5);
 
+    // Adjust top offset so the last row fits
+    const topOffset = 60;
+
     // --- Create tile grid ---
     this.tilesData = [];
     for(let r=0;r<GRID_ROWS;r++){
       this.tilesData[r] = [];
       for(let c=0;c<GRID_COLS;c++){
         const x = c*TILE_SIZE + TILE_SIZE/2;
-        const y = r*TILE_SIZE + TILE_SIZE/2 + 50; // top offset
-        const tile = this.add.rectangle(x, y, TILE_SIZE-4, TILE_SIZE-4, 0xffffff).setStrokeStyle(2, 0x333);
-        tile.setInteractive();
-        tile.row = r; tile.col = c;
-        tile.revealed = false;
-        tile.on('pointerdown', ()=>this.revealTile(tile));
-        this.tilesGroup.add(tile);
-        this.tilesData[r][c] = tile;
+        const y = r*TILE_SIZE + TILE_SIZE/2 + topOffset;
+        const tileRect = this.add.rectangle(x, y, TILE_SIZE-4, TILE_SIZE-4, 0xffffff).setStrokeStyle(2, 0x333);
+        const tileText = this.add.text(x, y, '🪴', {font:`${TILE_SIZE/2}px Arial`, align:'center'}).setOrigin(0.5);
+        tileRect.setInteractive();
+        tileRect.row = r; tileRect.col = c;
+        tileRect.revealed = false;
+        tileRect.text = tileText;
+        tileRect.on('pointerdown', ()=>this.revealTile(tileRect));
+        this.tilesGroup.add(tileRect);
+        this.tilesData[r][c] = tileRect;
       }
     }
 
@@ -58,17 +63,18 @@ class Main extends Phaser.Scene {
     this.carrotsFound = 0;
     this.gameOver = false;
     this.message.setText('');
-    this.totalCarrots = 5; // number of carrots
-    this.prizeCount = 1; // one prize
+    this.totalCarrots = 5;
+    this.prizeCount = 1;
+
     this.tiles = [];
-    
-    // Reset all tiles
+
+    // Reset tiles
     for(let r=0;r<GRID_ROWS;r++){
       for(let c=0;c<GRID_COLS;c++){
         const t = this.tilesData[r][c];
         t.revealed = false;
-        t.fillColor = 0xffffff;
         t.content = 'empty';
+        t.text.setText('🪴');
         this.tiles.push(t);
       }
     }
@@ -93,7 +99,7 @@ class Main extends Phaser.Scene {
     tile.revealed = true;
 
     if(tile.content === 'carrot'){
-      tile.fillColor = 0xffd700; // yellow
+      tile.text.setText('🥕');
       this.carrotsFound++;
       if(this.carrotsFound === this.totalCarrots){
         this.message.setText('You found all carrots! You win!');
@@ -101,17 +107,17 @@ class Main extends Phaser.Scene {
         this.time.delayedCall(1500, ()=>this.resetGame());
       }
     } else if(tile.content === 'prize'){
-      tile.fillColor = 0x00ff00; // green
+      tile.text.setText('🎁');
       this.message.setText('You found the prize! Instant win!');
       this.gameOver = true;
       this.time.delayedCall(1500, ()=>this.resetGame());
     } else if(tile.content === 'farmer'){
-      tile.fillColor = 0xff0000; // red
+      tile.text.setText('👨‍🌾');
       this.message.setText('Oops! You clicked the farmer. Game over.');
       this.gameOver = true;
       this.time.delayedCall(1500, ()=>this.resetGame());
     } else {
-      tile.fillColor = 0xcccccc; // empty tile
+      tile.text.setText('🪴'); // Should never happen
     }
   }
 }

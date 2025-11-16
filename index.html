@@ -6,15 +6,20 @@
 <title>Find the Carrots Game</title>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
 <style>
-html, body { height:100%; margin:0; display:flex; justify-content:center; align-items:flex-start; background:#a8e6cf; font-family: Arial, sans-serif; }
-#game-container { width:100%; max-width:600px; height:100vh; display:flex; justify-content:center; align-items:flex-start; position:relative; }
-canvas { border:3px solid #333; }
-.header { width:100%; text-align:center; font-size:24px; margin:10px 0; color:#333; font-weight:bold; }
+html, body { height:100%; margin:0; display:flex; justify-content:center; align-items:center; background:#a8e6cf; font-family: Arial, sans-serif; }
+#container { display:flex; flex-direction:column; align-items:center; }
+.header { font-size:24px; margin-bottom:10px; color:#333; font-weight:bold; text-align:center; }
+#game-container { width:600px; height:600px; position:relative; }
+canvas { border:3px solid #333; display:block; margin:auto; }
+#resetButton { margin-top:10px; padding:8px 16px; font-size:16px; border:none; border-radius:6px; background:#2b8a3e; color:white; cursor:pointer; display:none; }
 </style>
 </head>
 <body>
-<div class="header">Find all carrots before farmer catches you!</div>
-<div id="game-container"></div>
+<div id="container">
+  <div class="header">Find all carrots before farmer catches you!</div>
+  <div id="game-container"></div>
+  <button id="resetButton">Play Again</button>
+</div>
 
 <script>
 const WIDTH = 600;
@@ -22,7 +27,7 @@ const HEIGHT = 600;
 const HEADER_HEIGHT = 50;
 const GRID_ROWS = 5;
 const GRID_COLS = 5;
-const TILE_SIZE = (HEIGHT - HEADER_HEIGHT - 20) / GRID_ROWS; // Ensure all rows fit
+const TILE_SIZE = (HEIGHT - 20) / GRID_ROWS; // ensure all rows fit
 
 class Boot extends Phaser.Scene {
   constructor(){ super('Boot'); }
@@ -44,7 +49,7 @@ class Main extends Phaser.Scene {
     this.tilesGroup = this.add.group();
     this.tilesData = [];
 
-    const topOffset = HEADER_HEIGHT + 20;
+    const topOffset = 60;
 
     for(let r=0;r<GRID_ROWS;r++){
       this.tilesData[r] = [];
@@ -63,6 +68,9 @@ class Main extends Phaser.Scene {
       }
     }
 
+    this.resetButton = document.getElementById('resetButton');
+    this.resetButton.addEventListener('click', ()=>this.resetGame());
+
     this.resetGame();
   }
 
@@ -70,6 +78,7 @@ class Main extends Phaser.Scene {
     this.carrotsFound = 0;
     this.gameOver = false;
     this.message.setText('');
+    this.resetButton.style.display = 'none';
     this.totalCarrots = 5;
     this.prizeCount = 1;
 
@@ -109,36 +118,34 @@ class Main extends Phaser.Scene {
       tile.text.setText('🥕');
       this.carrotsFound++;
       if(this.carrotsFound === this.totalCarrots){
-        this.message.setText('You found all carrots! You win!');
-        this.gameOver = true;
-        this.revealRemainingEmpty();
-        this.time.delayedCall(1500, ()=>this.resetGame());
+        this.endGame('You found all carrots! You win!');
       }
     } else if(tile.content === 'prize'){
       tile.text.setText('🎁');
-      this.message.setText('You found the prize! Instant win!');
-      this.gameOver = true;
-      this.revealRemainingEmpty();
-      this.time.delayedCall(1500, ()=>this.resetGame());
+      this.endGame('You found the prize! Instant win!');
     } else if(tile.content === 'farmer'){
       tile.text.setText('👨‍🌾');
-      this.message.setText('Oops! You clicked the farmer. Game over.');
-      this.gameOver = true;
-      this.revealRemainingEmpty();
-      this.time.delayedCall(1500, ()=>this.resetGame());
+      this.endGame('Oops! You clicked the farmer. Game over.');
     } else {
-      // reveal plant on empty tile
-      tile.text.setText('🪴');
+      tile.text.setText('🪴'); // reveal plant for empty tiles clicked
     }
   }
 
-  revealRemainingEmpty(){
-    // show plants on all empty unrevealed tiles
+  endGame(message){
+    this.gameOver = true;
+    this.message.setText(message);
+
+    // Reveal all remaining carrots and empty plants
     this.tiles.forEach(t=>{
-      if(!t.revealed && t.content==='empty'){
-        t.text.setText('🪴');
+      if(!t.revealed){
+        if(t.content === 'carrot') t.text.setText('🥕');
+        else if(t.content === 'prize') t.text.setText('🎁');
+        else if(t.content === 'farmer') t.text.setText('👨‍🌾');
+        else t.text.setText('🪴');
       }
     });
+
+    this.resetButton.style.display = 'block'; // show play again button
   }
 }
 

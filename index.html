@@ -50,16 +50,19 @@ class Main extends Phaser.Scene {
     g.generateTexture('bg', WIDTH, HEIGHT);
     this.bg1.setTexture('bg');
 
-    // ground
-    const groundH = 96;
-    this.ground = this.add.tileSprite(0, HEIGHT - groundH, WIDTH*2, groundH, null).setOrigin(0);
-    const gg = this.make.graphics({x:0, y:0, add:false});
-    gg.fillStyle(0x6b4f2f, 1); gg.fillRect(0,0,WIDTH*2,groundH);
-    // planks
-    gg.lineStyle(2, 0x5a3f2a, 1);
-    for(let i=0;i<40;i++){ gg.strokeRect(i*80, 0, 60, groundH); }
-    gg.generateTexture('ground', WIDTH*2, groundH);
-    this.ground.setTexture('ground');
+   // background
+const g = this.make.graphics({add:false});
+g.fillStyle(0x8ed6ff, 1);
+g.fillRect(0,0,200,HEIGHT); // only 200px wide
+g.generateTexture('bg', 200, HEIGHT);
+this.bg1 = this.add.tileSprite(0,0,WIDTH,HEIGHT,'bg').setOrigin(0);
+
+// ground
+const gg = this.make.graphics({add:false});
+gg.fillStyle(0x6b4f2f,1);
+gg.fillRect(0,0,200,groundH);
+gg.generateTexture('ground', 200, groundH);
+this.ground = this.add.tileSprite(0, HEIGHT-groundH, WIDTH, groundH,'ground').setOrigin(0);
 
     // player (simple rounded rectangle)
     const p = this.make.graphics({x:0,y:0,add:false}); p.fillStyle(0xffd166,1); p.fillRoundedRect(0,0,60,60,10);
